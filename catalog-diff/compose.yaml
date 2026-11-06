@@ -9,6 +9,9 @@ services:
     hostname: puppet
     environment:
       OPENVOXSERVER_HOSTNAME: puppet
+      # Pin the certname. Without it the server uses its FQDN, which picks up
+      # the host's DNS search domain and no longer matches the allowlist below.
+      CERTNAME: puppet
       CATALOG_DIFF_CERTNAME: catalog-diff
     volumes:
       # One directory per environment: the base branch and the branch under test.

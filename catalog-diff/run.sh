@@ -39,8 +39,28 @@ compose up --detach --wait
 
 step 'Running each agent once in noop mode to record facts and a catalog'
 for agent in "${agents[@]}"; do
-  compose exec -T "$agent" "$puppet" agent --test --noop --server puppet
+  compose exec -T "$agent" "$puppet" agent --test --noop --server puppet --certname "$agent"
 done
+
+step 'Waiting for OpenVoxDB to store facts and a catalog for each agent'
+stored_nodes() {
+  compose exec -T openvoxserver bash -c '
+    ssl=/etc/puppetlabs/puppet/ssl
+    curl -sS -G https://openvoxdb:8081/pdb/query/v4 \
+      --cacert "$ssl/certs/ca.pem" --cert "$ssl/certs/puppet.pem" --key "$ssl/private_keys/puppet.pem" \
+      --data-urlencode "query=nodes[count()] { catalog_timestamp is not null and facts_timestamp is not null }"
+  '
+}
+for attempt in {1..30}; do
+  stored="$(stored_nodes)"
+  [[ "$stored" == *"\"count\":${#agents[@]}"* ]] && break
+  if (( attempt == 30 )); then
+    echo "OpenVoxDB has not stored every agent: $stored" >&2
+    exit 1
+  fi
+  sleep 2
+done
+echo "OpenVoxDB has facts and a catalog for ${#agents[@]} nodes"
 
 step 'Preparing the Catalog Diff node'
 compose exec -T catalog-diff bash -euo pipefail -c "
