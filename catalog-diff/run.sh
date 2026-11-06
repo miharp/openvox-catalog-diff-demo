@@ -71,19 +71,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-step 'Starting the server, OpenVoxDB, and agents'
-compose up --detach --wait
-
 for env in "${environments[@]}"; do
   [[ -f "$work/environments/$env/Puppetfile" ]] || continue
   step "Installing the modules in the $env Puppetfile"
-  # The server image ships r10k. Root, so it can write to the bind mount;
-  # then the modules go back to the user running this script.
-  compose exec -T -u root openvoxserver bash -euo pipefail -c "
+  # The server image ships r10k. This runs before the server starts, because
+  # the image caches environments for good once it has read them. Root, so
+  # it can write to the bind mount; then the modules go back to the user
+  # running this script.
+  compose run --rm -T --no-deps -u root --entrypoint bash openvoxserver -euo pipefail -c "
     r10k puppetfile install --verbose --puppetfile $code/$env/Puppetfile --moduledir $code/$env/modules
     chown -R $(id -u):$(id -g) $code/$env/modules
   "
 done
+
+step 'Starting the server, OpenVoxDB, and agents'
+compose up --detach --wait
 
 step 'Running each agent once in noop mode, so OpenVoxDB has its facts'
 for node in "${nodes[@]}"; do
