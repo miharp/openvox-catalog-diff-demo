@@ -32,6 +32,16 @@ class profile::nginx (
     notify  => Service['nginx'],
   }
 
+  file { '/etc/nginx/conf.d/status.conf':
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0644',
+    content => "server {\n  listen 127.0.0.1:8080;\n  location /status { stub_status; }\n}\n",
+    require => Package['nginx'],
+    notify  => Service['nginx'],
+  }
+
   service { 'nginx':
     ensure => running,
     enable => true,
