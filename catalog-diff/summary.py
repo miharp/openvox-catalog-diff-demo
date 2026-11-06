@@ -111,7 +111,11 @@ def text(nodes, failed):
         out += [f"  removed  {resource}" for resource in removed]
         for resource, body in diffs:
             out.append(f"  changed  {resource}")
-            out += [f"    {line}" for line in body.expandtabs(2).splitlines()]
+            lines = body.splitlines()
+            if not body.startswith("@@"):
+                # A parameter diff: the unchanged parameters around it are not needed here.
+                lines = [f"{line[0]} {line[1:].strip()}" for line in lines if line[:1] in ("+", "-")]
+            out += [f"    {line}" for line in lines]
         out.append("")
 
     return out

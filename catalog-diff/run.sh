@@ -91,7 +91,11 @@ if ! compose exec -T catalog-diff "$puppet" catalog diff \
   exit 1
 fi
 
-echo
 echo "Full output and JSON report: ${work#"$repo"/}/report/"
+
+# Tear down first so the summary is the last thing on screen.
+trap - EXIT
+cleanup
+
 echo
 "$here/summary.py" --text "$work/report/report.json"
