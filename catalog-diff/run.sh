@@ -37,7 +37,7 @@ git -C "$repo" archive "$head_ref" | tar -x -C "$work/environments/change"
 step 'Starting the server, OpenVoxDB, and agents'
 compose up --detach --wait
 
-step 'Running each agent once in noop mode to record facts and a catalog'
+step 'Running each agent once in noop mode, so OpenVoxDB has its facts'
 for agent in "${agents[@]}"; do
   echo "--- $agent"
   compose exec -T "$agent" "$puppet" agent --test --noop --server puppet --certname "$agent"
@@ -73,18 +73,16 @@ compose exec -T catalog-diff bash -euo pipefail -c "
   $puppet module install puppet-catalog_diff
 "
 
-step 'Comparing catalogs: production (from OpenVoxDB) against change (compiled now)'
+step "Comparing each node's catalog compiled from production and from change"
 # Catalog Diff's own output is long, so it goes to a file and the report is
 # summarized instead. It is shown if the command itself fails.
 if ! compose exec -T catalog-diff "$puppet" catalog diff \
   puppet:8140/production puppet:8140/change \
   --certname catalog-diff \
   --filter_old_env \
-  --old_catalog_from_puppetdb \
   --certless \
   --show_resource_diff \
   --content_diff \
-  --ignore_parameters alias \
   --color false \
   --output_report /report/report.json > "$work/report/diff.txt" 2>&1; then
   cat "$work/report/diff.txt"
