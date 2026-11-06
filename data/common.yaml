@@ -1,4 +1,4 @@
 ---
 profile::base::motd: "Managed by OpenVox. Local changes will be overwritten.\n"
-profile::nginx::worker_connections: 1024
+profile::nginx::worker_connections: 4096
 profile::postgresql::max_connections: 100
