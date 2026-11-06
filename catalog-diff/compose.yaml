@@ -55,29 +55,8 @@ services:
     volumes:
       - ./postgresql_init:/docker-entrypoint-initdb.d
 
-  # Agents idle until run.sh asks each one for a noop run. Their role comes
-  # from the pp_role extension requested in csr_attributes.yaml.
-  web01: &agent
-    image: ghcr.io/openvoxproject/openvoxagent:8
-    hostname: web01
-    entrypoint: ["sleep", "infinity"]
-    volumes:
-      - ./nodes/web01/csr_attributes.yaml:/etc/puppetlabs/puppet/csr_attributes.yaml:ro
-    depends_on:
-      openvoxdb:
-        condition: service_healthy
-
-  web02:
-    <<: *agent
-    hostname: web02
-    volumes:
-      - ./nodes/web02/csr_attributes.yaml:/etc/puppetlabs/puppet/csr_attributes.yaml:ro
-
-  db01:
-    <<: *agent
-    hostname: db01
-    volumes:
-      - ./nodes/db01/csr_attributes.yaml:/etc/puppetlabs/puppet/csr_attributes.yaml:ro
+  # The agents are not here. run.sh writes one service per directory under
+  # nodes/ into .work/nodes.yaml and loads both files.
 
   # The node that runs Catalog Diff. It never runs the agent, so it does not
   # show up in OpenVoxDB as a node to compare.

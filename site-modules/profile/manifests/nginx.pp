@@ -25,6 +25,13 @@ class profile::nginx (
     notify  => Service['nginx'],
   }
 
+  # From the Puppetfile: restart nginx when it dies.
+  systemd::dropin_file { 'restart.conf':
+    unit    => 'nginx.service',
+    content => "[Service]\nRestart=on-failure\n",
+    notify  => Service['nginx'],
+  }
+
   service { 'nginx':
     ensure => running,
     enable => true,
