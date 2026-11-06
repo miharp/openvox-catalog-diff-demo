@@ -24,9 +24,11 @@ GitHub-hosted runners and needs no access to real infrastructure.
 5. Enrolls a separate `catalog-diff` node and runs `puppet catalog diff` from it. The old catalogs
    come from OpenVoxDB. The new ones are compiled for the `change` environment through the
    server's certless catalog API, using the facts stored in OpenVoxDB.
-6. Writes a JSON report to `catalog-diff/.work/report/report.json`.
+6. Prints a summary, and writes the JSON report and Catalog Diff's full output to
+   `catalog-diff/.work/report/`.
 
-`catalog-diff/summary.py` turns the report into the Markdown that the workflow posts.
+`catalog-diff/summary.py` writes that summary from the report, as text for the terminal or as
+the Markdown the workflow posts. Nodes that change in the same way are listed together.
 
 ## Try it locally
 

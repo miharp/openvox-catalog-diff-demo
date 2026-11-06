@@ -39,6 +39,7 @@ compose up --detach --wait
 
 step 'Running each agent once in noop mode to record facts and a catalog'
 for agent in "${agents[@]}"; do
+  echo "--- $agent"
   compose exec -T "$agent" "$puppet" agent --test --noop --server puppet --certname "$agent"
 done
 
@@ -73,7 +74,9 @@ compose exec -T catalog-diff bash -euo pipefail -c "
 "
 
 step 'Comparing catalogs: production (from OpenVoxDB) against change (compiled now)'
-compose exec -T catalog-diff "$puppet" catalog diff \
+# Catalog Diff's own output is long, so it goes to a file and the report is
+# summarized instead. It is shown if the command itself fails.
+if ! compose exec -T catalog-diff "$puppet" catalog diff \
   puppet:8140/production puppet:8140/change \
   --certname catalog-diff \
   --filter_old_env \
@@ -82,6 +85,13 @@ compose exec -T catalog-diff "$puppet" catalog diff \
   --show_resource_diff \
   --content_diff \
   --ignore_parameters alias \
-  --output_report /report/report.json
+  --color false \
+  --output_report /report/report.json > "$work/report/diff.txt" 2>&1; then
+  cat "$work/report/diff.txt"
+  exit 1
+fi
 
-step "Report written to ${work#"$repo"/}/report/report.json"
+echo
+echo "Full output and JSON report: ${work#"$repo"/}/report/"
+echo
+"$here/summary.py" --text "$work/report/report.json"
