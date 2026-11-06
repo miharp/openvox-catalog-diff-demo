@@ -1,0 +1,19 @@
+<%- | Integer[1] $worker_connections,
+      Array[String[1]] $server_names,
+| -%>
+# Managed by OpenVox
+worker_processes auto;
+
+events {
+  worker_connections <%= $worker_connections %>;
+}
+
+http {
+  include mime.types;
+
+  server {
+    listen 80 default_server;
+    server_name <%= $server_names.join(' ') %>;
+    root /var/www/html;
+  }
+}

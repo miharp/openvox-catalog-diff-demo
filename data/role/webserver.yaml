@@ -1,0 +1,3 @@
+---
+profile::nginx::server_names:
+  - www.example.com

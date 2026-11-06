@@ -1,0 +1,89 @@
+---
+# A throwaway OpenVox server, OpenVoxDB, and a few agents for catalog diffing.
+# Based on https://github.com/voxpupuli/crafty/tree/main/openvox/minimal
+name: catalog-diff
+
+services:
+  openvoxserver:
+    image: ghcr.io/openvoxproject/openvoxserver:8
+    hostname: puppet
+    environment:
+      OPENVOXSERVER_HOSTNAME: puppet
+      CATALOG_DIFF_CERTNAME: catalog-diff
+    volumes:
+      # One directory per environment: the base branch and the branch under test.
+      - ./.work/environments:/etc/puppetlabs/code/environments
+      - ./server-entrypoint.d:/container-custom-entrypoint.d
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ksS https://puppet:8140/status/v1/simple | grep -q '^running$'"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+
+  openvoxdb:
+    image: ghcr.io/openvoxproject/openvoxdb:8
+    hostname: openvoxdb
+    environment:
+      # The server stores facts and catalogs; the diff node reads them.
+      OPENVOXDB_CERTIFICATE_ALLOWLIST: puppet,catalog-diff
+    healthcheck:
+      test: ["CMD-SHELL", "curl -ksS https://openvoxdb:8081/status/v1/simple | grep -q '^running$'"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+    depends_on:
+      openvoxserver:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: docker.io/postgres:18-alpine
+    hostname: postgres
+    environment:
+      POSTGRES_DB: openvoxdb
+      POSTGRES_USER: openvoxdb
+      POSTGRES_PASSWORD: openvoxdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openvoxdb -d openvoxdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - ./postgresql_init:/docker-entrypoint-initdb.d
+
+  # Agents idle until run.sh asks each one for a noop run. Their role comes
+  # from the pp_role extension requested in csr_attributes.yaml.
+  web01: &agent
+    image: ghcr.io/openvoxproject/openvoxagent:8
+    hostname: web01
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./nodes/web01/csr_attributes.yaml:/etc/puppetlabs/puppet/csr_attributes.yaml:ro
+    depends_on:
+      openvoxdb:
+        condition: service_healthy
+
+  web02:
+    <<: *agent
+    hostname: web02
+    volumes:
+      - ./nodes/web02/csr_attributes.yaml:/etc/puppetlabs/puppet/csr_attributes.yaml:ro
+
+  db01:
+    <<: *agent
+    hostname: db01
+    volumes:
+      - ./nodes/db01/csr_attributes.yaml:/etc/puppetlabs/puppet/csr_attributes.yaml:ro
+
+  # The node that runs Catalog Diff. It never runs the agent, so it does not
+  # show up in OpenVoxDB as a node to compare.
+  catalog-diff:
+    image: ghcr.io/openvoxproject/openvoxagent:8
+    hostname: catalog-diff
+    entrypoint: ["sleep", "infinity"]
+    volumes:
+      - ./.work/report:/report
+    depends_on:
+      openvoxdb:
+        condition: service_healthy

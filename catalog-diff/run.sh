@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Diff the catalogs of every demo node between two git refs.
+#
+#   catalog-diff/run.sh [BASE_REF] [HEAD_REF]
+#
+# BASE_REF is deployed as the `production` environment and HEAD_REF as
+# `change`. Set KEEP=1 to leave the stack running afterwards.
+
+set -euo pipefail
+
+base_ref="${1:-production}"
+head_ref="${2:-HEAD}"
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(git -C "$here" rev-parse --show-toplevel)"
+work="$here/.work"
+puppet=/opt/puppetlabs/bin/puppet
+agents=(web01 web02 db01)
+
+compose() { docker compose --project-directory "$here" "$@"; }
+step() { printf '\n==> %s\n' "$*"; }
+
+cleanup() {
+  if [[ "${KEEP:-0}" != 1 ]]; then
+    step 'Tearing down'
+    compose down --volumes --remove-orphans
+  fi
+}
+trap cleanup EXIT
+
+step "Deploying $base_ref as production and $head_ref as change"
+rm -rf "$work"
+mkdir -p "$work/environments/production" "$work/environments/change" "$work/report"
+git -C "$repo" archive "$base_ref" | tar -x -C "$work/environments/production"
+git -C "$repo" archive "$head_ref" | tar -x -C "$work/environments/change"
+
+step 'Starting the server, OpenVoxDB, and agents'
+compose up --detach --wait
+
+step 'Running each agent once in noop mode to record facts and a catalog'
+for agent in "${agents[@]}"; do
+  compose exec -T "$agent" "$puppet" agent --test --noop --server puppet
+done
+
+step 'Preparing the Catalog Diff node'
+compose exec -T catalog-diff bash -euo pipefail -c "
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get -qq update
+  apt-get -qq install -y openvoxdb-termini >/dev/null
+  printf '[main]\nserver_urls = https://openvoxdb:8081\n' > /etc/puppetlabs/puppet/puppetdb.conf
+  $puppet ssl bootstrap --server puppet --certname catalog-diff
+  $puppet module install puppet-catalog_diff
+"
+
+step 'Comparing catalogs: production (from OpenVoxDB) against change (compiled now)'
+compose exec -T catalog-diff "$puppet" catalog diff \
+  puppet:8140/production puppet:8140/change \
+  --certname catalog-diff \
+  --filter_old_env \
+  --old_catalog_from_puppetdb \
+  --certless \
+  --show_resource_diff \
+  --content_diff \
+  --output_report /report/report.json
+
+step "Report written to ${work#"$repo"/}/report/report.json"
