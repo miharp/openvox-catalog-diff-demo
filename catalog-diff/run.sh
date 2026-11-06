@@ -61,6 +61,7 @@ compose exec -T catalog-diff "$puppet" catalog diff \
   --certless \
   --show_resource_diff \
   --content_diff \
+  --ignore_parameters alias \
   --output_report /report/report.json
 
 step "Report written to ${work#"$repo"/}/report/report.json"
